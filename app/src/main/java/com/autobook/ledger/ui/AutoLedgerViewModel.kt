@@ -24,6 +24,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneId
 
 class AutoLedgerViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = LedgerRepository(LedgerDatabase.get(application).ledgerDao())
@@ -177,3 +180,13 @@ fun List<ParsedBill>.filtered(filters: EntryFilters): List<ParsedBill> =
 
 fun List<ParsedBill>.confirmedExpenses(): List<ParsedBill> =
     filter { it.status == LedgerStatus.CONFIRMED && it.type == LedgerType.EXPENSE && !it.isDeleted }
+
+fun List<ParsedBill>.currentMonthConfirmedExpenses(
+    now: Long = System.currentTimeMillis(),
+    zoneId: ZoneId = ZoneId.systemDefault(),
+): List<ParsedBill> {
+    val currentMonth = YearMonth.from(Instant.ofEpochMilli(now).atZone(zoneId))
+    return confirmedExpenses().filter { entry ->
+        YearMonth.from(Instant.ofEpochMilli(entry.occurredAt).atZone(zoneId)) == currentMonth
+    }
+}

@@ -240,7 +240,7 @@ private fun RecordsScreen(
 
 @Composable
 private fun InsightsScreen(entries: List<ParsedBill>, stats: LedgerStats) {
-    val expenses = entries.confirmedExpenses()
+    val expenses = entries.currentMonthConfirmedExpenses()
     val category = expenses.groupBy { it.categoryPath.topCategory() }.mapValues { it.value.sumOf { entry -> entry.amountCents } }
     val merchant = expenses.groupBy { it.merchant }.mapValues { it.value.sumOf { entry -> entry.amountCents } }
     val account = expenses.groupBy { it.account }.mapValues { it.value.sumOf { entry -> entry.amountCents } }

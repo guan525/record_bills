@@ -143,6 +143,34 @@ class LedgerRepositoryTest {
         assertNotEquals(first.id, later.id)
         assertEquals(2, dao.entries.size)
     }
+
+    @Test
+    fun keepsSameMerchantAmountSeparateWhenRawTextDiffers() = runBlocking {
+        val dao = FakeLedgerDao()
+        val repository = LedgerRepository(dao)
+
+        val first = repository.capture(
+            sourceKind = SourceKind.NOTIFICATION,
+            sourcePackage = "com.eg.android.AlipayGphone",
+            sourceAppName = "支付宝",
+            title = "支付宝付款",
+            text = "你已成功付款 ¥36.80 给 星巴克咖啡 订单A123",
+            timestampMillis = 1_717_000_000_000,
+        )
+        val second = repository.capture(
+            sourceKind = SourceKind.NOTIFICATION,
+            sourcePackage = "com.eg.android.AlipayGphone",
+            sourceAppName = "支付宝",
+            title = "支付宝付款",
+            text = "你已成功付款 ¥36.80 给 星巴克咖啡 订单B456",
+            timestampMillis = 1_717_000_030_000,
+        )
+
+        requireNotNull(first)
+        requireNotNull(second)
+        assertNotEquals(first.id, second.id)
+        assertEquals(2, dao.entries.size)
+    }
 }
 
 private class FakeLedgerDao : LedgerDao {
@@ -207,6 +235,7 @@ private class FakeLedgerDao : LedgerDao {
         type: String,
         amountCents: Long,
         merchant: String,
+        rawText: String,
         windowStart: Long,
         windowEnd: Long,
     ): LedgerEntryEntity? =
@@ -218,6 +247,7 @@ private class FakeLedgerDao : LedgerDao {
                     it.type == type &&
                     it.amountCents == amountCents &&
                     it.merchant == merchant &&
+                    it.rawText == rawText &&
                     it.occurredAt in windowStart..windowEnd
             }
             .maxByOrNull { it.occurredAt }

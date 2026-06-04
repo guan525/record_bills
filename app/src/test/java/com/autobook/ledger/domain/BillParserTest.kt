@@ -119,6 +119,80 @@ class BillParserTest {
     }
 
     @Test
+    fun parsesUnionPayExpenseWithMerchantColon() {
+        val bill = parser.parse(
+            sourceKind = SourceKind.NOTIFICATION,
+            sourcePackage = "com.unionpay",
+            sourceAppName = "云闪付",
+            title = "交易提醒",
+            text = "您尾号1234的银行卡消费金额20.00元，商户：瑞幸咖啡。",
+            timestampMillis = 1_717_000_000_000,
+        )
+
+        requireNotNull(bill)
+        assertEquals(LedgerType.EXPENSE, bill.type)
+        assertEquals(2_000L, bill.amountCents)
+        assertEquals("瑞幸咖啡", bill.merchant)
+        assertEquals("餐饮/咖啡饮品/咖啡", bill.categoryPath)
+        assertEquals("银行卡", bill.account)
+    }
+
+    @Test
+    fun parsesBankIncomeSmsWithPayer() {
+        val bill = parser.parse(
+            sourceKind = SourceKind.SMS,
+            sourcePackage = null,
+            sourceAppName = "招商银行",
+            title = "招商银行",
+            text = "您尾号1234的储蓄卡06月04日工资收入人民币1200.00元，付款方字节跳动，余额充足。",
+            timestampMillis = 1_717_000_000_000,
+        )
+
+        requireNotNull(bill)
+        assertEquals(LedgerType.INCOME, bill.type)
+        assertEquals(120_000L, bill.amountCents)
+        assertEquals("字节跳动", bill.merchant)
+        assertEquals("收入/工资/工资", bill.categoryPath)
+        assertEquals("银行卡", bill.account)
+    }
+
+    @Test
+    fun parsesThousandsSeparatedBankAmount() {
+        val bill = parser.parse(
+            sourceKind = SourceKind.SMS,
+            sourcePackage = null,
+            sourceAppName = "招商银行",
+            title = "招商银行",
+            text = "您尾号1234的信用卡06月04日消费人民币1,234.56元，商户携程酒店，可用额度充足。",
+            timestampMillis = 1_717_000_000_000,
+        )
+
+        requireNotNull(bill)
+        assertEquals(LedgerType.EXPENSE, bill.type)
+        assertEquals(123_456L, bill.amountCents)
+        assertEquals("携程酒店", bill.merchant)
+        assertEquals("旅行/酒店住宿/酒店", bill.categoryPath)
+    }
+
+    @Test
+    fun usesActualPaidAmountInsteadOfDiscountContext() {
+        val bill = parser.parse(
+            sourceKind = SourceKind.NOTIFICATION,
+            sourcePackage = "com.eg.android.AlipayGphone",
+            sourceAppName = "支付宝",
+            title = "支付成功",
+            text = "星巴克订单金额200元，优惠30元，实付170元",
+            timestampMillis = 1_717_000_000_000,
+        )
+
+        requireNotNull(bill)
+        assertEquals(LedgerType.EXPENSE, bill.type)
+        assertEquals(17_000L, bill.amountCents)
+        assertEquals("星巴克", bill.merchant)
+        assertEquals("餐饮/咖啡饮品/咖啡", bill.categoryPath)
+    }
+
+    @Test
     fun ignoresPromotionWithoutTransaction() {
         val bill = parser.parse(
             sourceKind = SourceKind.NOTIFICATION,
@@ -148,4 +222,3 @@ class BillParserTest {
         assertFalse(bill.confidence >= 80)
     }
 }
-

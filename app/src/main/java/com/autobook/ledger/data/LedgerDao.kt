@@ -29,6 +29,7 @@ interface LedgerDao {
             AND type = :type
             AND amount_cents = :amountCents
             AND merchant = :merchant
+            AND raw_text = :rawText
             AND occurred_at BETWEEN :windowStart AND :windowEnd
         ORDER BY occurred_at DESC
         LIMIT 1
@@ -40,6 +41,7 @@ interface LedgerDao {
         type: String,
         amountCents: Long,
         merchant: String,
+        rawText: String,
         windowStart: Long,
         windowEnd: Long,
     ): LedgerEntryEntity?

@@ -55,14 +55,16 @@ class BillParser(
 
     private fun extractAmountCents(raw: String): Long? {
         val patterns = listOf(
-            Regex("""[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)"""),
-            Regex("""人民币\s*([0-9]+(?:\.[0-9]{1,2})?)\s*元?"""),
-            Regex("""([0-9]+(?:\.[0-9]{1,2})?)\s*元"""),
+            Regex("""(?:实付|实际支付|支付金额|付款金额|扣款金额)\s*[¥￥]?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元?"""),
+            Regex("""[¥￥]\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)"""),
+            Regex("""人民币\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元?"""),
+            Regex("""(?:消费金额|消费|支出|付款|扣款)\s*[¥￥]?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元"""),
+            Regex("""([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元"""),
         )
         val amountText = patterns.firstNotNullOfOrNull { pattern ->
             pattern.find(raw)?.groupValues?.getOrNull(1)
         } ?: return null
-        return BigDecimal(amountText)
+        return BigDecimal(amountText.replace(",", ""))
             .multiply(BigDecimal(100))
             .setScale(0, RoundingMode.HALF_UP)
             .longValueExact()
@@ -79,15 +81,17 @@ class BillParser(
         val patterns = listOf(
             Regex("""给\s*([^\s，,。；;]+)"""),
             Regex("""收款方\s*([^\s，,。；;]+)"""),
-            Regex("""商户\s*([^\s，,。；;可]+)"""),
+            Regex("""付款方\s*([^\s，,。；;]+)"""),
+            Regex("""商户\s*[:：]?\s*([^\s，,。；;可]+)"""),
             Regex("""在\s*([^\s，,。；;]+)\s*(?:消费|支付|付款)"""),
+            Regex("""([^\s，,。；;]+)订单(?:金额|支付|付款)"""),
             Regex("""([^\s，,。；;]+)\s*(?:会员)?(?:自动续费|扣款|消费成功|付款成功)"""),
         )
         val candidate = patterns.firstNotNullOfOrNull { pattern ->
             pattern.find(raw)?.groupValues?.getOrNull(1)
         }
         return candidate
-            ?.trim(' ', '，', ',', '。', '；', ';')
+            ?.trim(' ', '，', ',', '。', '；', ';', ':', '：')
             ?.takeIf { it.isNotBlank() }
             ?: sourceAppName.ifBlank { "未知商户" }
     }
@@ -133,4 +137,3 @@ class BillParser(
         return score.coerceIn(35, 95)
     }
 }
-

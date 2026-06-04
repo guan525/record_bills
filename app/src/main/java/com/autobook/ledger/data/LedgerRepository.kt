@@ -97,6 +97,7 @@ class LedgerRepository(
             type = parsed.type.name,
             amountCents = parsed.amountCents,
             merchant = parsed.merchant,
+            rawText = parsed.rawText,
             windowStart = parsed.occurredAt - DUPLICATE_CAPTURE_WINDOW_MS,
             windowEnd = parsed.occurredAt + DUPLICATE_CAPTURE_WINDOW_MS,
         )
