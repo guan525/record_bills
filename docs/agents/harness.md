@@ -33,9 +33,11 @@
 - 审查结果使用 `docs/agents/templates/review-report.md`。
 - 运行记录使用 `scripts/harness/create-run-record.sh <slug> "<goal>"` 生成到 `docs/agents/runs/`。
 - 每个 Agent 的输出必须包含改动文件、验证命令和剩余风险。
+- 环境诊断使用 `scripts/harness/doctor.sh`，只输出配置/依赖状态，不输出本地 key。
 
 ## 质量门禁
 
+- `scripts/harness/doctor.sh`
 - `scripts/harness/check-secrets.sh`
 - `scripts/harness/check-git-hygiene.sh`
 - `scripts/harness/check-room-schema.sh`

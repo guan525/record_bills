@@ -13,6 +13,52 @@ import org.junit.Test
 
 class LedgerRepositoryTest {
     @Test
+    fun addsManualIncomeWithNoteAndTypeAwareDefaults() = runBlocking {
+        val dao = FakeLedgerDao()
+        val repository = LedgerRepository(dao)
+
+        repository.addManualEntry(
+            type = LedgerType.INCOME,
+            amountCents = 8_888,
+            merchant = "兼职收入",
+            categoryPath = "",
+            account = "银行卡",
+            note = "6月项目尾款",
+        )
+
+        val entry = dao.entries.values.single().toParsedBill()
+        assertEquals(LedgerType.INCOME, entry.type)
+        assertEquals(LedgerStatus.CONFIRMED, entry.status)
+        assertEquals(8_888L, entry.amountCents)
+        assertEquals("兼职收入", entry.merchant)
+        assertEquals("收入/其他/其他", entry.categoryPath)
+        assertEquals("银行卡", entry.account)
+        assertEquals("6月项目尾款", entry.note)
+        assertEquals("手动", entry.sourceAppName)
+    }
+
+    @Test
+    fun addsManualTransferWithTypeAwareDefaultCategory() = runBlocking {
+        val dao = FakeLedgerDao()
+        val repository = LedgerRepository(dao)
+
+        repository.addManualEntry(
+            type = LedgerType.TRANSFER,
+            amountCents = 50_000,
+            merchant = "",
+            categoryPath = "",
+            account = "",
+            note = "",
+        )
+
+        val entry = dao.entries.values.single().toParsedBill()
+        assertEquals(LedgerType.TRANSFER, entry.type)
+        assertEquals("手动记录", entry.merchant)
+        assertEquals("资金流转/账户互转/转出", entry.categoryPath)
+        assertEquals("现金", entry.account)
+    }
+
+    @Test
     fun confirmsMultiplePendingEntriesTogether() = runBlocking {
         val dao = FakeLedgerDao()
         val repository = LedgerRepository(dao)

@@ -40,22 +40,42 @@ class LedgerRepository(
         categoryPath: String,
         account: String,
         occurredAt: Long = System.currentTimeMillis(),
+    ) = addManualEntry(
+        type = LedgerType.EXPENSE,
+        amountCents = amountCents,
+        merchant = merchant,
+        categoryPath = categoryPath,
+        account = account,
+        note = "",
+        occurredAt = occurredAt,
+    )
+
+    suspend fun addManualEntry(
+        type: LedgerType,
+        amountCents: Long,
+        merchant: String,
+        categoryPath: String,
+        account: String,
+        note: String,
+        occurredAt: Long = System.currentTimeMillis(),
     ) {
         val now = System.currentTimeMillis()
+        val normalizedMerchant = merchant.ifBlank { "手动记录" }
         val bill = ParsedBill(
             id = UUID.randomUUID().toString(),
-            type = LedgerType.EXPENSE,
+            type = type,
             status = LedgerStatus.CONFIRMED,
             amountCents = amountCents,
             occurredAt = occurredAt,
-            merchant = merchant.ifBlank { "手动记录" },
-            title = merchant.ifBlank { "手动记录" },
-            categoryPath = categoryPath.ifBlank { "未分类/待确认/其他" },
+            merchant = normalizedMerchant,
+            title = normalizedMerchant,
+            categoryPath = categoryPath.ifBlank { defaultManualCategory(type) },
             account = account.ifBlank { "现金" },
             sourceKind = SourceKind.MANUAL,
             sourceAppName = "手动",
             rawText = "manual",
             confidence = 100,
+            note = note.trim(),
             createdAt = now,
             updatedAt = now,
         )
@@ -105,5 +125,13 @@ class LedgerRepository(
 
     private companion object {
         const val DUPLICATE_CAPTURE_WINDOW_MS = 2 * 60 * 1000L
+
+        fun defaultManualCategory(type: LedgerType): String = when (type) {
+            LedgerType.EXPENSE -> "未分类/待确认/其他"
+            LedgerType.INCOME -> "收入/其他/其他"
+            LedgerType.REFUND -> "购物/电商/退款"
+            LedgerType.TRANSFER -> "资金流转/账户互转/转出"
+            LedgerType.ADJUSTMENT -> "调整/手动调整/其他"
+        }
     }
 }

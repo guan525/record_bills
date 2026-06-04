@@ -80,7 +80,7 @@ fun AutoLedgerAppScreen(
     syncKey: String,
     supabaseEndpoint: String,
     categories: List<String>,
-    onAddManual: (String, String, String, String) -> Unit,
+    onAddManual: (LedgerType, String, String, String, String, String) -> Unit,
     onConfirm: (String) -> Unit,
     onIgnore: (String) -> Unit,
     onConfirmAll: (List<String>) -> Unit,
@@ -127,8 +127,8 @@ fun AutoLedgerAppScreen(
             ManualEntryDialog(
                 categories = categories,
                 onDismiss = { showManualDialog = false },
-                onSave = { amount, merchant, category, account ->
-                    onAddManual(amount, merchant, category, account)
+                onSave = { type, amount, merchant, category, account, note ->
+                    onAddManual(type, amount, merchant, category, account, note)
                     showManualDialog = false
                 },
             )
@@ -428,17 +428,31 @@ private fun BatchActions(
 private fun ManualEntryDialog(
     categories: List<String>,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit,
+    onSave: (LedgerType, String, String, String, String, String) -> Unit,
 ) {
+    var type by remember { mutableStateOf(LedgerType.EXPENSE) }
     var amount by remember { mutableStateOf("") }
     var merchant by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(categories.firstOrNull() ?: "未分类/待确认/其他") }
+    var category by remember { mutableStateOf(defaultManualCategory(type, categories)) }
     var account by remember { mutableStateOf("现金") }
+    var note by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("手动记一笔") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    manualTypes.forEach { option ->
+                        FilterChip(
+                            selected = type == option,
+                            onClick = {
+                                type = option
+                                category = defaultManualCategory(option, categories)
+                            },
+                            label = { Text(manualTypeLabel(option)) },
+                        )
+                    }
+                }
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { amount = it },
@@ -446,9 +460,10 @@ private fun ManualEntryDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                 )
-                OutlinedTextField(value = merchant, onValueChange = { merchant = it }, label = { Text("商户/备注") }, singleLine = true)
+                OutlinedTextField(value = merchant, onValueChange = { merchant = it }, label = { Text("商户/来源") }, singleLine = true)
                 OutlinedTextField(value = category, onValueChange = { category = it }, label = { Text("分类路径") }, minLines = 2)
                 OutlinedTextField(value = account, onValueChange = { account = it }, label = { Text("账户") }, singleLine = true)
+                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("备注") }, minLines = 2)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     categories.take(8).forEach { option ->
                         FilterChip(selected = category == option, onClick = { category = option }, label = { Text(option.substringAfter("/")) })
@@ -456,7 +471,7 @@ private fun ManualEntryDialog(
                 }
             }
         },
-        confirmButton = { Button(onClick = { onSave(amount, merchant, category, account) }) { Text("保存") } },
+        confirmButton = { Button(onClick = { onSave(type, amount, merchant, category, account, note) }) { Text("保存") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
@@ -588,6 +603,32 @@ private fun statusLabel(status: LedgerStatus): String = when (status) {
     LedgerStatus.PENDING -> "待确认"
     LedgerStatus.CONFIRMED -> "已确认"
     LedgerStatus.IGNORED -> "已忽略"
+}
+
+private val manualTypes = listOf(
+    LedgerType.EXPENSE,
+    LedgerType.INCOME,
+    LedgerType.REFUND,
+    LedgerType.TRANSFER,
+)
+
+private fun manualTypeLabel(type: LedgerType): String = when (type) {
+    LedgerType.EXPENSE -> "支出"
+    LedgerType.INCOME -> "收入"
+    LedgerType.REFUND -> "退款"
+    LedgerType.TRANSFER -> "转账"
+    LedgerType.ADJUSTMENT -> "调整"
+}
+
+private fun defaultManualCategory(type: LedgerType, categories: List<String>): String {
+    val fallback = when (type) {
+        LedgerType.EXPENSE -> "未分类/待确认/其他"
+        LedgerType.INCOME -> "收入/其他/其他"
+        LedgerType.REFUND -> "购物/电商/退款"
+        LedgerType.TRANSFER -> "资金流转/账户互转/转出"
+        LedgerType.ADJUSTMENT -> "调整/手动调整/其他"
+    }
+    return categories.firstOrNull { it.substringBefore("/") == fallback.substringBefore("/") } ?: fallback
 }
 
 private fun amountColor(type: LedgerType): Color = when (type) {

@@ -62,18 +62,27 @@ class AutoLedgerViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun addManual(amountText: String, merchant: String, categoryPath: String, account: String) {
+    fun addManual(
+        type: LedgerType,
+        amountText: String,
+        merchant: String,
+        categoryPath: String,
+        account: String,
+        note: String,
+    ) {
         val cents = amountText.toCentsOrNull()
         if (cents == null || cents <= 0) {
             _message.value = "请输入有效金额"
             return
         }
         viewModelScope.launch {
-            repository.addManualExpense(
+            repository.addManualEntry(
+                type = type,
                 amountCents = cents,
                 merchant = merchant,
                 categoryPath = categoryPath,
                 account = account,
+                note = note,
             )
             _message.value = "已新增手动账单"
         }

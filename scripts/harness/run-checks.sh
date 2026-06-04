@@ -3,6 +3,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+scripts/harness/doctor.sh
 scripts/harness/check-secrets.sh
 scripts/harness/check-git-hygiene.sh
 scripts/harness/check-room-schema.sh
