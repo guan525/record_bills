@@ -28,10 +28,13 @@ dist/auto-ledger-debug.apk
 
 ## Supabase 设置
 
-App 已内置：
+Supabase 连接信息只写在本地 `local.properties`，不要提交到 GitHub。参考：
 
-- Project URL: `https://juttwaujeylfspinawzk.supabase.co`
-- Publishable key: `sb_publishable_Gf4WK-3HkJxexTeoRztArA_u50zo-gf`
+```properties
+sdk.dir=/opt/homebrew/share/android-commandlinetools
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+```
 
 同步前需要在 Supabase 控制台执行一次：
 
@@ -41,6 +44,8 @@ App 已内置：
 
 执行后，在 App `设置` 页点击 `立即同步`。App 会生成一个换机同步密钥。换手机时，在新手机安装 App，填入同一个同步密钥，再点击同步即可拉取同一批账本数据。
 
+运行 `scripts/harness/check-secrets.sh` 可以检查当前将被提交的文件中是否混入 Supabase key、项目 URL 或私钥路径。若提示历史中曾经出现 key，请先在 Supabase 轮换 publishable key；历史重写需要单独确认后再做。
+
 ## 本地数据
 
 所有账单先写入手机本地 Room/SQLite 数据库。Supabase 只是同步和换机恢复层。即使网络不可用或 Supabase 未建表，本地账本仍可继续使用。
@@ -48,9 +53,9 @@ App 已内置：
 ## 开发命令
 
 ```bash
+scripts/harness/run-checks.sh
 ./gradlew :app:testDebugUnitTest
 ./gradlew :app:assembleDebug
 JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home /opt/homebrew/share/android-commandlinetools/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk
 /opt/homebrew/share/android-commandlinetools/build-tools/35.0.0/aapt dump badging app/build/outputs/apk/debug/app-debug.apk
 ```
-

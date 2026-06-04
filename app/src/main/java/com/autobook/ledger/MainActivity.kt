@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
                 sources = sources,
                 message = message,
                 syncKey = syncKey,
+                supabaseEndpoint = viewModel.supabaseEndpoint,
                 categories = viewModel.categories,
                 onAddManual = viewModel::addManual,
                 onConfirm = viewModel::confirm,

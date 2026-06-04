@@ -85,12 +85,12 @@ The installed-app scanner does not read private app data. It only lists packages
 
 ## Supabase Sync
 
-The app uses:
+The app reads Supabase connection values from local, untracked build configuration:
 
-- Project URL: `https://juttwaujeylfspinawzk.supabase.co`
-- Publishable key: `sb_publishable_Gf4WK-3HkJxexTeoRztArA_u50zo-gf`
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
 
-The publishable key is safe to ship in the app, but it cannot create tables. The project needs a one-time SQL script run in Supabase SQL Editor.
+The publishable key is not an admin secret, but it still must not be committed to GitHub. The project needs a one-time SQL script run in Supabase SQL Editor.
 
 The first sync design avoids asking the user to share admin secrets. The app generates a local sync key. Records are synced with that sync key, and the same key can be entered on another phone to restore the ledger. Row-level security policies restrict anonymous access to rows whose `owner_key` matches the `x-owner-key` request header sent by the app.
 
@@ -114,4 +114,3 @@ Implementation must verify:
 - Android build.
 - APK package metadata.
 - APK install to the connected device with adb.
-

@@ -78,6 +78,7 @@ fun AutoLedgerAppScreen(
     sources: List<SpendingSourceApp>,
     message: String,
     syncKey: String,
+    supabaseEndpoint: String,
     categories: List<String>,
     onAddManual: (String, String, String, String) -> Unit,
     onConfirm: (String) -> Unit,
@@ -116,7 +117,7 @@ fun AutoLedgerAppScreen(
                     MainTab.RECORDS -> RecordsScreen(entries, onConfirm, onIgnore, onDelete)
                     MainTab.INSIGHTS -> InsightsScreen(entries, stats)
                     MainTab.SOURCES -> SourcesScreen(sources, onRefreshSources)
-                    MainTab.SETTINGS -> SettingsScreen(syncKey, message, onSyncNow, onExportCsv, onUpdateSyncKey)
+                    MainTab.SETTINGS -> SettingsScreen(syncKey, supabaseEndpoint, message, onSyncNow, onExportCsv, onUpdateSyncKey)
                 }
             }
         }
@@ -278,6 +279,7 @@ private fun SourcesScreen(
 @Composable
 private fun SettingsScreen(
     syncKey: String,
+    supabaseEndpoint: String,
     message: String,
     onSyncNow: () -> Unit,
     onExportCsv: () -> Unit,
@@ -294,7 +296,7 @@ private fun SettingsScreen(
         item {
             Panel {
                 Text("Supabase 项目", fontWeight = FontWeight.SemiBold)
-                Text("https://juttwaujeylfspinawzk.supabase.co", style = MaterialTheme.typography.bodySmall)
+                Text(supabaseEndpoint, style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = editingKey,

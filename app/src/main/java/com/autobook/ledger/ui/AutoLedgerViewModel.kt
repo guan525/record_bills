@@ -3,6 +3,7 @@ package com.autobook.ledger.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.autobook.ledger.BuildConfig
 import com.autobook.ledger.capture.AppSourceScanner
 import com.autobook.ledger.capture.SpendingSourceApp
 import com.autobook.ledger.data.LedgerDatabase
@@ -47,6 +48,7 @@ class AutoLedgerViewModel(application: Application) : AndroidViewModel(applicati
     val syncKey: StateFlow<String> = _syncKey.asStateFlow()
 
     val categories: List<String> = CategoryCatalog.default().rules.map { it.path }.distinct()
+    val supabaseEndpoint: String = BuildConfig.SUPABASE_URL.ifBlank { "未配置：请在本地 local.properties 设置 SUPABASE_URL" }
 
     init {
         refreshSources()
@@ -113,7 +115,7 @@ class AutoLedgerViewModel(application: Application) : AndroidViewModel(applicati
             _message.value = "正在同步 Supabase..."
             runCatching { syncClient.sync(syncPreferences.getOrCreateOwnerKey()) }
                 .onSuccess { _message.value = it.message }
-                .onFailure { _message.value = it.message ?: "同步失败，请先执行 Supabase SQL" }
+                .onFailure { _message.value = it.message ?: "同步失败，请检查本地 Supabase 配置和 SQL 建表" }
         }
     }
 
@@ -152,4 +154,3 @@ fun List<ParsedBill>.filtered(filters: EntryFilters): List<ParsedBill> =
 
 fun List<ParsedBill>.confirmedExpenses(): List<ParsedBill> =
     filter { it.status == LedgerStatus.CONFIRMED && it.type == LedgerType.EXPENSE && !it.isDeleted }
-

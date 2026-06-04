@@ -21,6 +21,7 @@ class SupabaseSyncClient(
     private val repository: LedgerRepository,
 ) {
     suspend fun sync(ownerKey: String): SyncResult = withContext(Dispatchers.IO) {
+        requireConfigured()
         val unsynced = repository.unsyncedEntries()
         if (unsynced.isNotEmpty()) push(ownerKey, unsynced)
         val remote = pull(ownerKey)
@@ -31,6 +32,12 @@ class SupabaseSyncClient(
             pulled = remote.size,
             message = "同步完成：上传 ${unsynced.size} 条，拉取 ${remote.size} 条",
         )
+    }
+
+    private fun requireConfigured() {
+        if (BuildConfig.SUPABASE_URL.isBlank() || BuildConfig.SUPABASE_PUBLISHABLE_KEY.isBlank()) {
+            throw IllegalStateException("Supabase 未配置：请在本地 local.properties 设置 SUPABASE_URL 和 SUPABASE_PUBLISHABLE_KEY")
+        }
     }
 
     private fun push(ownerKey: String, entries: List<LedgerEntryEntity>) {
@@ -134,4 +141,3 @@ class SupabaseSyncClient(
         isDeleted = optBoolean("is_deleted", false),
     )
 }
-
