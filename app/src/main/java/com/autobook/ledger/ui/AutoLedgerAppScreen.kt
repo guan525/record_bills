@@ -30,8 +30,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -83,6 +83,8 @@ fun AutoLedgerAppScreen(
     onAddManual: (String, String, String, String) -> Unit,
     onConfirm: (String) -> Unit,
     onIgnore: (String) -> Unit,
+    onConfirmAll: (List<String>) -> Unit,
+    onIgnoreAll: (List<String>) -> Unit,
     onDelete: (String) -> Unit,
     onRefreshSources: () -> Unit,
     onSyncNow: () -> Unit,
@@ -113,8 +115,8 @@ fun AutoLedgerAppScreen(
                     .padding(padding),
             ) {
                 when (tab) {
-                    MainTab.HOME -> HomeScreen(stats, entries, message, onAdd = { showManualDialog = true }, onConfirm, onIgnore)
-                    MainTab.RECORDS -> RecordsScreen(entries, onConfirm, onIgnore, onDelete)
+                    MainTab.HOME -> HomeScreen(stats, entries, message, onAdd = { showManualDialog = true }, onConfirm, onIgnore, onConfirmAll, onIgnoreAll)
+                    MainTab.RECORDS -> RecordsScreen(entries, onConfirm, onIgnore, onConfirmAll, onIgnoreAll, onDelete)
                     MainTab.INSIGHTS -> InsightsScreen(entries, stats)
                     MainTab.SOURCES -> SourcesScreen(sources, onRefreshSources)
                     MainTab.SETTINGS -> SettingsScreen(syncKey, supabaseEndpoint, message, onSyncNow, onExportCsv, onUpdateSyncKey)
@@ -142,6 +144,8 @@ private fun HomeScreen(
     onAdd: () -> Unit,
     onConfirm: (String) -> Unit,
     onIgnore: (String) -> Unit,
+    onConfirmAll: (List<String>) -> Unit,
+    onIgnoreAll: (List<String>) -> Unit,
 ) {
     val pending = entries.filter { it.status == LedgerStatus.PENDING }
     LazyColumn(
@@ -162,6 +166,15 @@ private fun HomeScreen(
         item { StatusMessage(message) }
         if (pending.isNotEmpty()) {
             item { SectionTitle("待确认账单") }
+            item {
+                BatchActions(
+                    count = pending.size,
+                    confirmLabel = "全部确认",
+                    ignoreLabel = "全部忽略",
+                    onConfirmAll = { onConfirmAll(pending.map { it.id }) },
+                    onIgnoreAll = { onIgnoreAll(pending.map { it.id }) },
+                )
+            }
             items(pending.take(5), key = { it.id }) { entry ->
                 EntryRow(entry, showRaw = false, onConfirm = onConfirm, onIgnore = onIgnore, onDelete = null)
             }
@@ -178,10 +191,13 @@ private fun RecordsScreen(
     entries: List<ParsedBill>,
     onConfirm: (String) -> Unit,
     onIgnore: (String) -> Unit,
+    onConfirmAll: (List<String>) -> Unit,
+    onIgnoreAll: (List<String>) -> Unit,
     onDelete: (String) -> Unit,
 ) {
     var filters by remember { mutableStateOf(EntryFilters()) }
     val filtered = entries.filtered(filters)
+    val pendingFiltered = filtered.filter { it.status == LedgerStatus.PENDING }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -203,6 +219,17 @@ private fun RecordsScreen(
                 FilterChip(selected = filters.status == LedgerStatus.PENDING, onClick = { filters = filters.copy(status = LedgerStatus.PENDING) }, label = { Text("待确认") })
                 FilterChip(selected = filters.status == LedgerStatus.CONFIRMED, onClick = { filters = filters.copy(status = LedgerStatus.CONFIRMED) }, label = { Text("已确认") })
                 FilterChip(selected = filters.status == LedgerStatus.IGNORED, onClick = { filters = filters.copy(status = LedgerStatus.IGNORED) }, label = { Text("已忽略") })
+            }
+        }
+        if (filters.status == LedgerStatus.PENDING && pendingFiltered.isNotEmpty()) {
+            item {
+                BatchActions(
+                    count = pendingFiltered.size,
+                    confirmLabel = "确认当前筛选",
+                    ignoreLabel = "忽略当前筛选",
+                    onConfirmAll = { onConfirmAll(pendingFiltered.map { it.id }) },
+                    onIgnoreAll = { onIgnoreAll(pendingFiltered.map { it.id }) },
+                )
             }
         }
         items(filtered, key = { it.id }) { entry ->
@@ -363,7 +390,7 @@ private fun EntryRow(
             Text(entry.amountCents.cny(), fontWeight = FontWeight.Bold, color = amountColor(entry.type))
         }
         if (showRaw && entry.rawText.isNotBlank() && entry.rawText != "manual") {
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Text(entry.rawText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
@@ -373,6 +400,25 @@ private fun EntryRow(
             }
             if (onDelete != null) {
                 TextButton(onClick = { onDelete(entry.id) }) { Text("删除") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BatchActions(
+    count: Int,
+    confirmLabel: String,
+    ignoreLabel: String,
+    onConfirmAll: () -> Unit,
+    onIgnoreAll: () -> Unit,
+) {
+    Panel {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("$count 条待处理", fontWeight = FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onConfirmAll, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) { Text(confirmLabel) }
+                OutlinedButton(onClick = onIgnoreAll, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) { Text(ignoreLabel) }
             }
         }
     }
@@ -430,7 +476,7 @@ private fun PermissionPanel(
             }
             Button(onClick = onOpenNotificationSettings) { Text(if (notificationEnabled) "设置" else "去开启") }
         }
-        Divider(modifier = Modifier.padding(vertical = 12.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column {
                 Text("短信账单", fontWeight = FontWeight.SemiBold)
@@ -459,7 +505,7 @@ private fun Breakdown(title: String, values: Map<String, Long>) {
                             Text(item.value.cny(), fontWeight = FontWeight.SemiBold)
                         }
                         LinearProgressIndicator(
-                            progress = (item.value.toFloat() / max).coerceIn(0f, 1f),
+                            progress = { (item.value.toFloat() / max).coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }

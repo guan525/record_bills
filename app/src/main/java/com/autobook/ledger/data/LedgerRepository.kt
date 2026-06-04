@@ -90,7 +90,18 @@ class LedgerRepository(
 
     suspend fun ignore(id: String) = dao.updateStatus(id, LedgerStatus.IGNORED.name, System.currentTimeMillis())
 
+    suspend fun confirmAll(ids: List<String>) = updateStatusForIds(ids, LedgerStatus.CONFIRMED)
+
+    suspend fun ignoreAll(ids: List<String>) = updateStatusForIds(ids, LedgerStatus.IGNORED)
+
     suspend fun delete(id: String) = dao.softDelete(id, System.currentTimeMillis())
+
+    private suspend fun updateStatusForIds(ids: List<String>, status: LedgerStatus) {
+        val uniqueIds = ids.distinct()
+        if (uniqueIds.isNotEmpty()) {
+            dao.updateStatusForIds(uniqueIds, status.name, System.currentTimeMillis())
+        }
+    }
 
     private companion object {
         const val DUPLICATE_CAPTURE_WINDOW_MS = 2 * 60 * 1000L

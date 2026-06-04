@@ -53,6 +53,9 @@ interface LedgerDao {
     @Query("UPDATE ledger_entries SET status = :status, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateStatus(id: String, status: String, updatedAt: Long)
 
+    @Query("UPDATE ledger_entries SET status = :status, updated_at = :updatedAt WHERE id IN (:ids)")
+    suspend fun updateStatusForIds(ids: List<String>, status: String, updatedAt: Long)
+
     @Query("UPDATE ledger_entries SET is_deleted = 1, updated_at = :updatedAt WHERE id = :id")
     suspend fun softDelete(id: String, updatedAt: Long)
 

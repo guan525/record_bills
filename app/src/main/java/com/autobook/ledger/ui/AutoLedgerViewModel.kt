@@ -93,6 +93,20 @@ class AutoLedgerViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun confirmAll(ids: List<String>) {
+        viewModelScope.launch {
+            repository.confirmAll(ids)
+            _message.value = "已批量确认 ${ids.distinct().size} 条账单"
+        }
+    }
+
+    fun ignoreAll(ids: List<String>) {
+        viewModelScope.launch {
+            repository.ignoreAll(ids)
+            _message.value = "已批量忽略 ${ids.distinct().size} 条账单"
+        }
+    }
+
     fun delete(id: String) {
         viewModelScope.launch {
             repository.delete(id)

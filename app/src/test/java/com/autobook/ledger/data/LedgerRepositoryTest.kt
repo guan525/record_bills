@@ -1,5 +1,8 @@
 package com.autobook.ledger.data
 
+import com.autobook.ledger.domain.LedgerStatus
+import com.autobook.ledger.domain.LedgerType
+import com.autobook.ledger.domain.ParsedBill
 import com.autobook.ledger.domain.SourceKind
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,6 +12,36 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class LedgerRepositoryTest {
+    @Test
+    fun confirmsMultiplePendingEntriesTogether() = runBlocking {
+        val dao = FakeLedgerDao()
+        val repository = LedgerRepository(dao)
+        val first = LedgerEntryEntity.fromParsedBill(ParsedBill.sample(status = LedgerStatus.PENDING, amountCents = 100).copy(id = "first"))
+        val second = LedgerEntryEntity.fromParsedBill(ParsedBill.sample(status = LedgerStatus.PENDING, amountCents = 200).copy(id = "second"))
+        val ignored = LedgerEntryEntity.fromParsedBill(ParsedBill.sample(status = LedgerStatus.PENDING, amountCents = 300).copy(id = "ignored"))
+        dao.upsertAll(listOf(first, second, ignored))
+
+        repository.confirmAll(listOf("first", "second"))
+
+        assertEquals(LedgerStatus.CONFIRMED.name, dao.entries.getValue("first").status)
+        assertEquals(LedgerStatus.CONFIRMED.name, dao.entries.getValue("second").status)
+        assertEquals(LedgerStatus.PENDING.name, dao.entries.getValue("ignored").status)
+    }
+
+    @Test
+    fun ignoresMultiplePendingEntriesTogether() = runBlocking {
+        val dao = FakeLedgerDao()
+        val repository = LedgerRepository(dao)
+        val first = LedgerEntryEntity.fromParsedBill(ParsedBill.sample(type = LedgerType.EXPENSE, status = LedgerStatus.PENDING).copy(id = "first"))
+        val second = LedgerEntryEntity.fromParsedBill(ParsedBill.sample(type = LedgerType.EXPENSE, status = LedgerStatus.PENDING).copy(id = "second"))
+        dao.upsertAll(listOf(first, second))
+
+        repository.ignoreAll(listOf("first", "second"))
+
+        assertEquals(LedgerStatus.IGNORED.name, dao.entries.getValue("first").status)
+        assertEquals(LedgerStatus.IGNORED.name, dao.entries.getValue("second").status)
+    }
+
     @Test
     fun reusesExistingEntryForDuplicateCapturedTransactionInShortWindow() = runBlocking {
         val dao = FakeLedgerDao()
@@ -93,6 +126,15 @@ private class FakeLedgerDao : LedgerDao {
     override suspend fun updateStatus(id: String, status: String, updatedAt: Long) {
         entries[id]?.let {
             entries[id] = it.copy(status = status, updatedAt = updatedAt)
+        }
+        entriesFlow.value = activeEntries()
+    }
+
+    override suspend fun updateStatusForIds(ids: List<String>, status: String, updatedAt: Long) {
+        ids.distinct().forEach { id ->
+            entries[id]?.let {
+                entries[id] = it.copy(status = status, updatedAt = updatedAt)
+            }
         }
         entriesFlow.value = activeEntries()
     }

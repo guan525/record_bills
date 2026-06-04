@@ -30,6 +30,8 @@ class MainActivity : ComponentActivity() {
                 onAddManual = viewModel::addManual,
                 onConfirm = viewModel::confirm,
                 onIgnore = viewModel::ignore,
+                onConfirmAll = viewModel::confirmAll,
+                onIgnoreAll = viewModel::ignoreAll,
                 onDelete = viewModel::delete,
                 onRefreshSources = viewModel::refreshSources,
                 onSyncNow = viewModel::syncNow,
