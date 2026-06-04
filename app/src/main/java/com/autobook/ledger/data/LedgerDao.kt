@@ -20,6 +20,30 @@ interface LedgerDao {
     @Query("SELECT * FROM ledger_entries WHERE synced_at IS NULL OR updated_at > synced_at ORDER BY updated_at ASC")
     suspend fun unsyncedEntries(): List<LedgerEntryEntity>
 
+    @Query(
+        """
+        SELECT * FROM ledger_entries
+        WHERE is_deleted = 0
+            AND source_kind = :sourceKind
+            AND COALESCE(source_package, '') = COALESCE(:sourcePackage, '')
+            AND type = :type
+            AND amount_cents = :amountCents
+            AND merchant = :merchant
+            AND occurred_at BETWEEN :windowStart AND :windowEnd
+        ORDER BY occurred_at DESC
+        LIMIT 1
+        """
+    )
+    suspend fun findDuplicateCapture(
+        sourceKind: String,
+        sourcePackage: String?,
+        type: String,
+        amountCents: Long,
+        merchant: String,
+        windowStart: Long,
+        windowEnd: Long,
+    ): LedgerEntryEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: LedgerEntryEntity)
 
@@ -35,4 +59,3 @@ interface LedgerDao {
     @Query("UPDATE ledger_entries SET synced_at = :syncedAt WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<String>, syncedAt: Long)
 }
-

@@ -71,6 +71,17 @@ class LedgerRepository(
         timestampMillis: Long,
     ): ParsedBill? {
         val parsed = parser.parse(sourceKind, sourcePackage, sourceAppName, title, text, timestampMillis) ?: return null
+        val duplicate = dao.findDuplicateCapture(
+            sourceKind = parsed.sourceKind.name,
+            sourcePackage = parsed.sourcePackage,
+            type = parsed.type.name,
+            amountCents = parsed.amountCents,
+            merchant = parsed.merchant,
+            windowStart = parsed.occurredAt - DUPLICATE_CAPTURE_WINDOW_MS,
+            windowEnd = parsed.occurredAt + DUPLICATE_CAPTURE_WINDOW_MS,
+        )
+        if (duplicate != null) return duplicate.toParsedBill()
+
         dao.upsert(LedgerEntryEntity.fromParsedBill(parsed))
         return parsed
     }
@@ -80,5 +91,8 @@ class LedgerRepository(
     suspend fun ignore(id: String) = dao.updateStatus(id, LedgerStatus.IGNORED.name, System.currentTimeMillis())
 
     suspend fun delete(id: String) = dao.softDelete(id, System.currentTimeMillis())
-}
 
+    private companion object {
+        const val DUPLICATE_CAPTURE_WINDOW_MS = 2 * 60 * 1000L
+    }
+}

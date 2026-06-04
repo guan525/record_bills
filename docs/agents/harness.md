@@ -31,6 +31,7 @@
 
 - 分派任务使用 `docs/agents/templates/task-brief.md`。
 - 审查结果使用 `docs/agents/templates/review-report.md`。
+- 运行记录使用 `scripts/harness/create-run-record.sh <slug> "<goal>"` 生成到 `docs/agents/runs/`。
 - 每个 Agent 的输出必须包含改动文件、验证命令和剩余风险。
 
 ## 质量门禁
