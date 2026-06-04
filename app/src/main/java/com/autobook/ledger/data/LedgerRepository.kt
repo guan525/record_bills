@@ -115,6 +115,31 @@ class LedgerRepository(
 
     suspend fun ignoreAll(ids: List<String>) = updateStatusForIds(ids, LedgerStatus.IGNORED)
 
+    suspend fun updateEntry(
+        id: String,
+        type: LedgerType,
+        amountCents: Long,
+        merchant: String,
+        categoryPath: String,
+        account: String,
+        note: String,
+        confirm: Boolean,
+    ): Boolean {
+        val normalizedMerchant = merchant.trim().ifBlank { "待确认商户" }
+        val updatedCount = dao.updateEntryDetails(
+            id = id,
+            type = type.name,
+            status = if (confirm) LedgerStatus.CONFIRMED.name else null,
+            amountCents = amountCents,
+            merchant = normalizedMerchant,
+            categoryPath = categoryPath.trim().ifBlank { defaultManualCategory(type) },
+            account = account.trim().ifBlank { "待确认账户" },
+            note = note.trim(),
+            updatedAt = System.currentTimeMillis(),
+        )
+        return updatedCount > 0
+    }
+
     suspend fun delete(id: String) = dao.softDelete(id, System.currentTimeMillis())
 
     private suspend fun updateStatusForIds(ids: List<String>, status: LedgerStatus) {

@@ -38,6 +38,7 @@
 ## 质量门禁
 
 - `scripts/harness/doctor.sh`
+- `scripts/harness/test-harness.sh`
 - `scripts/harness/check-secrets.sh`
 - `scripts/harness/check-git-hygiene.sh`
 - `scripts/harness/check-room-schema.sh`

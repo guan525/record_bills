@@ -49,13 +49,13 @@ class BillParser(
 
     private fun isPromotionOnly(raw: String): Boolean {
         val promotional = listOf("优惠", "红包", "活动", "领取", "满", "立减", "折扣", "券")
-        val transactional = listOf("付款", "支付", "支出", "消费", "扣款", "退款", "转入", "转出", "到账", "自动续费", "收款")
+        val transactional = listOf("成功付款", "付款成功", "已支付", "实付", "实际支付", "支付成功", "支付金额", "付款金额", "支出", "消费", "扣款", "退款", "转入", "转出", "到账", "自动续费", "收款")
         return promotional.any(raw::contains) && transactional.none(raw::contains)
     }
 
     private fun extractAmountCents(raw: String): Long? {
         val patterns = listOf(
-            Regex("""(?:实付|实际支付|支付金额|付款金额|扣款金额)\s*[¥￥]?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元?"""),
+            Regex("""(?:实付|已支付|实际支付|支付金额|付款金额|扣款金额)\s*[¥￥]?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元?"""),
             Regex("""[¥￥]\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)"""),
             Regex("""人民币\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元?"""),
             Regex("""(?:消费金额|消费|支出|付款|扣款)\s*[¥￥]?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元"""),

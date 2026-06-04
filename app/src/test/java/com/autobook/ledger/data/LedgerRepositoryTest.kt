@@ -171,6 +171,72 @@ class LedgerRepositoryTest {
         assertNotEquals(first.id, second.id)
         assertEquals(2, dao.entries.size)
     }
+
+    @Test
+    fun updatesParsedEntryDetailsAndMarksItUnsynced() = runBlocking {
+        val dao = FakeLedgerDao()
+        val repository = LedgerRepository(dao)
+        val original = LedgerEntryEntity.fromParsedBill(
+            ParsedBill.sample(status = LedgerStatus.CONFIRMED, amountCents = 3_680)
+                .copy(id = "entry-1", syncedAt = 1_717_000_100_000),
+            updatedAt = 1_717_000_000_000,
+        )
+        dao.upsert(original)
+
+        val updated = repository.updateEntry(
+            id = "entry-1",
+            type = LedgerType.REFUND,
+            amountCents = 2_199,
+            merchant = "星巴克退款",
+            categoryPath = "购物/电商/退款",
+            account = "招商银行",
+            note = "客服退差价",
+            confirm = false,
+        )
+
+        assertEquals(true, updated)
+        val entry = dao.entries.getValue("entry-1").toParsedBill()
+        assertEquals(LedgerType.REFUND, entry.type)
+        assertEquals(LedgerStatus.CONFIRMED, entry.status)
+        assertEquals(2_199L, entry.amountCents)
+        assertEquals("星巴克退款", entry.merchant)
+        assertEquals("星巴克退款", entry.title)
+        assertEquals("购物/电商/退款", entry.categoryPath)
+        assertEquals("招商银行", entry.account)
+        assertEquals("客服退差价", entry.note)
+        assertEquals(null, entry.syncedAt)
+        assertNotEquals(original.updatedAt, entry.updatedAt)
+    }
+
+    @Test
+    fun canCorrectPendingEntryAndConfirmItTogether() = runBlocking {
+        val dao = FakeLedgerDao()
+        val repository = LedgerRepository(dao)
+        dao.upsert(
+            LedgerEntryEntity.fromParsedBill(
+                ParsedBill.sample(status = LedgerStatus.PENDING, amountCents = 1_000).copy(id = "pending-1"),
+            ),
+        )
+
+        repository.updateEntry(
+            id = "pending-1",
+            type = LedgerType.EXPENSE,
+            amountCents = 1_200,
+            merchant = "瑞幸咖啡",
+            categoryPath = "餐饮/饮品/咖啡",
+            account = "微信支付",
+            note = "早餐",
+            confirm = true,
+        )
+
+        val entry = dao.entries.getValue("pending-1").toParsedBill()
+        assertEquals(LedgerStatus.CONFIRMED, entry.status)
+        assertEquals(1_200L, entry.amountCents)
+        assertEquals("瑞幸咖啡", entry.merchant)
+        assertEquals("餐饮/饮品/咖啡", entry.categoryPath)
+        assertEquals("微信支付", entry.account)
+        assertEquals("早餐", entry.note)
+    }
 }
 
 private class FakeLedgerDao : LedgerDao {
@@ -211,6 +277,34 @@ private class FakeLedgerDao : LedgerDao {
             }
         }
         entriesFlow.value = activeEntries()
+    }
+
+    override suspend fun updateEntryDetails(
+        id: String,
+        type: String,
+        status: String?,
+        amountCents: Long,
+        merchant: String,
+        categoryPath: String,
+        account: String,
+        note: String,
+        updatedAt: Long,
+    ): Int {
+        val existing = entries[id]?.takeUnless { it.isDeleted } ?: return 0
+        entries[id] = existing.copy(
+            type = type,
+            status = status ?: existing.status,
+            amountCents = amountCents,
+            merchant = merchant,
+            title = merchant,
+            categoryPath = categoryPath,
+            account = account,
+            note = note,
+            updatedAt = updatedAt,
+            syncedAt = null,
+        )
+        entriesFlow.value = activeEntries()
+        return 1
     }
 
     override suspend fun softDelete(id: String, updatedAt: Long) {

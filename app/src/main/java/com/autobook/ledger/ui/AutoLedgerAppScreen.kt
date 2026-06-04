@@ -10,6 +10,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,6 +63,7 @@ import com.autobook.ledger.domain.LedgerStats
 import com.autobook.ledger.domain.LedgerStatus
 import com.autobook.ledger.domain.LedgerType
 import com.autobook.ledger.domain.ParsedBill
+import java.math.BigDecimal
 import java.util.Locale
 
 private enum class MainTab(val label: String) {
@@ -86,6 +89,7 @@ fun AutoLedgerAppScreen(
     onConfirmAll: (List<String>) -> Unit,
     onIgnoreAll: (List<String>) -> Unit,
     onDelete: (String) -> Unit,
+    onUpdateEntry: (String, LedgerType, String, String, String, String, String, Boolean) -> Unit,
     onRefreshSources: () -> Unit,
     onSyncNow: () -> Unit,
     onExportCsv: () -> Unit,
@@ -94,6 +98,7 @@ fun AutoLedgerAppScreen(
     AutoLedgerTheme {
         var tab by remember { mutableStateOf(MainTab.HOME) }
         var showManualDialog by remember { mutableStateOf(false) }
+        var editingEntry by remember { mutableStateOf<ParsedBill?>(null) }
         Scaffold(
             bottomBar = {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
@@ -115,8 +120,18 @@ fun AutoLedgerAppScreen(
                     .padding(padding),
             ) {
                 when (tab) {
-                    MainTab.HOME -> HomeScreen(stats, entries, message, onAdd = { showManualDialog = true }, onConfirm, onIgnore, onConfirmAll, onIgnoreAll)
-                    MainTab.RECORDS -> RecordsScreen(entries, onConfirm, onIgnore, onConfirmAll, onIgnoreAll, onDelete)
+                    MainTab.HOME -> HomeScreen(
+                        stats,
+                        entries,
+                        message,
+                        onAdd = { showManualDialog = true },
+                        onConfirm,
+                        onIgnore,
+                        onConfirmAll,
+                        onIgnoreAll,
+                        onEdit = { editingEntry = it },
+                    )
+                    MainTab.RECORDS -> RecordsScreen(entries, onConfirm, onIgnore, onConfirmAll, onIgnoreAll, onDelete, onEdit = { editingEntry = it })
                     MainTab.INSIGHTS -> InsightsScreen(entries, stats)
                     MainTab.SOURCES -> SourcesScreen(sources, onRefreshSources)
                     MainTab.SETTINGS -> SettingsScreen(syncKey, supabaseEndpoint, message, onSyncNow, onExportCsv, onUpdateSyncKey)
@@ -133,6 +148,17 @@ fun AutoLedgerAppScreen(
                 },
             )
         }
+        editingEntry?.let { entry ->
+            EditEntryDialog(
+                entry = entry,
+                categories = categories,
+                onDismiss = { editingEntry = null },
+                onSave = { type, amount, merchant, category, account, note, confirm ->
+                    onUpdateEntry(entry.id, type, amount, merchant, category, account, note, confirm)
+                    editingEntry = null
+                },
+            )
+        }
     }
 }
 
@@ -146,6 +172,7 @@ private fun HomeScreen(
     onIgnore: (String) -> Unit,
     onConfirmAll: (List<String>) -> Unit,
     onIgnoreAll: (List<String>) -> Unit,
+    onEdit: (ParsedBill) -> Unit,
 ) {
     val pending = entries.filter { it.status == LedgerStatus.PENDING }
     LazyColumn(
@@ -176,12 +203,12 @@ private fun HomeScreen(
                 )
             }
             items(pending.take(5), key = { it.id }) { entry ->
-                EntryRow(entry, showRaw = false, onConfirm = onConfirm, onIgnore = onIgnore, onDelete = null)
+                EntryRow(entry, showRaw = false, onConfirm = onConfirm, onIgnore = onIgnore, onDelete = null, onEdit = onEdit)
             }
         }
         item { SectionTitle("最近明细") }
         items(entries.take(12), key = { it.id }) { entry ->
-            EntryRow(entry, showRaw = false, onConfirm = onConfirm, onIgnore = onIgnore, onDelete = null)
+            EntryRow(entry, showRaw = false, onConfirm = onConfirm, onIgnore = onIgnore, onDelete = null, onEdit = onEdit)
         }
     }
 }
@@ -194,6 +221,7 @@ private fun RecordsScreen(
     onConfirmAll: (List<String>) -> Unit,
     onIgnoreAll: (List<String>) -> Unit,
     onDelete: (String) -> Unit,
+    onEdit: (ParsedBill) -> Unit,
 ) {
     var filters by remember { mutableStateOf(EntryFilters()) }
     val filtered = entries.filtered(filters)
@@ -233,7 +261,7 @@ private fun RecordsScreen(
             }
         }
         items(filtered, key = { it.id }) { entry ->
-            EntryRow(entry, showRaw = true, onConfirm = onConfirm, onIgnore = onIgnore, onDelete = onDelete)
+            EntryRow(entry, showRaw = true, onConfirm = onConfirm, onIgnore = onIgnore, onDelete = onDelete, onEdit = onEdit)
         }
     }
 }
@@ -376,6 +404,7 @@ private fun EntryRow(
     onConfirm: (String) -> Unit,
     onIgnore: (String) -> Unit,
     onDelete: ((String) -> Unit)?,
+    onEdit: (ParsedBill) -> Unit,
 ) {
     Panel {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -393,11 +422,12 @@ private fun EntryRow(
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Text(entry.rawText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
             if (entry.status == LedgerStatus.PENDING) {
                 Button(onClick = { onConfirm(entry.id) }, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) { Text("确认") }
                 OutlinedButton(onClick = { onIgnore(entry.id) }, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) { Text("忽略") }
             }
+            OutlinedButton(onClick = { onEdit(entry) }, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) { Text("纠错") }
             if (onDelete != null) {
                 TextButton(onClick = { onDelete(entry.id) }) { Text("删除") }
             }
@@ -436,11 +466,12 @@ private fun ManualEntryDialog(
     var category by remember { mutableStateOf(defaultManualCategory(type, categories)) }
     var account by remember { mutableStateOf("现金") }
     var note by remember { mutableStateOf("") }
+    var showAmountError by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("手动记一笔") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     manualTypes.forEach { option ->
                         FilterChip(
@@ -455,10 +486,17 @@ private fun ManualEntryDialog(
                 }
                 OutlinedTextField(
                     value = amount,
-                    onValueChange = { amount = it },
+                    onValueChange = {
+                        amount = it
+                        showAmountError = false
+                    },
                     label = { Text("金额") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
+                    isError = showAmountError,
+                    supportingText = {
+                        if (showAmountError) Text("请输入大于 0 的金额")
+                    },
                 )
                 OutlinedTextField(value = merchant, onValueChange = { merchant = it }, label = { Text("商户/来源") }, singleLine = true)
                 OutlinedTextField(value = category, onValueChange = { category = it }, label = { Text("分类路径") }, minLines = 2)
@@ -471,7 +509,110 @@ private fun ManualEntryDialog(
                 }
             }
         },
-        confirmButton = { Button(onClick = { onSave(type, amount, merchant, category, account, note) }) { Text("保存") } },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (!amount.isPositiveAmountText()) {
+                        showAmountError = true
+                    } else {
+                        onSave(type, amount, merchant, category, account, note)
+                    }
+                },
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun EditEntryDialog(
+    entry: ParsedBill,
+    categories: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (LedgerType, String, String, String, String, String, Boolean) -> Unit,
+) {
+    var type by remember(entry.id) { mutableStateOf(entry.type) }
+    var amount by remember(entry.id) { mutableStateOf(entry.amountCents.toAmountText()) }
+    var merchant by remember(entry.id) { mutableStateOf(entry.merchant) }
+    var category by remember(entry.id) { mutableStateOf(entry.categoryPath) }
+    var account by remember(entry.id) { mutableStateOf(entry.account) }
+    var note by remember(entry.id) { mutableStateOf(entry.note) }
+    var showAmountError by remember(entry.id) { mutableStateOf(false) }
+    val canConfirm = entry.status == LedgerStatus.PENDING
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (canConfirm) "纠错待确认账单" else "修改账单") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    manualTypes.forEach { option ->
+                        FilterChip(
+                            selected = type == option,
+                            onClick = {
+                                type = option
+                                if (category.isBlank() || category.startsWith("未分类/")) {
+                                    category = defaultManualCategory(option, categories)
+                                }
+                            },
+                            label = { Text(manualTypeLabel(option)) },
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = {
+                        amount = it
+                        showAmountError = false
+                    },
+                    label = { Text("金额") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    isError = showAmountError,
+                    supportingText = {
+                        if (showAmountError) Text("请输入大于 0 的金额")
+                    },
+                )
+                OutlinedTextField(value = merchant, onValueChange = { merchant = it }, label = { Text("商户/来源") }, singleLine = true)
+                OutlinedTextField(value = category, onValueChange = { category = it }, label = { Text("分类路径") }, minLines = 2)
+                OutlinedTextField(value = account, onValueChange = { account = it }, label = { Text("账户") }, singleLine = true)
+                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("备注") }, minLines = 2)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    categories.take(10).forEach { option ->
+                        FilterChip(selected = category == option, onClick = { category = option }, label = { Text(option.substringAfter("/")) })
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (canConfirm) {
+                    Button(
+                        onClick = {
+                            if (!amount.isPositiveAmountText()) {
+                                showAmountError = true
+                            } else {
+                                onSave(type, amount, merchant, category, account, note, true)
+                            }
+                        },
+                    ) {
+                        Text("保存并确认")
+                    }
+                }
+                OutlinedButton(
+                    onClick = {
+                        if (!amount.isPositiveAmountText()) {
+                            showAmountError = true
+                        } else {
+                            onSave(type, amount, merchant, category, account, note, false)
+                        }
+                    },
+                ) {
+                    Text("保存")
+                }
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
@@ -630,6 +771,12 @@ private fun defaultManualCategory(type: LedgerType, categories: List<String>): S
     }
     return categories.firstOrNull { it.substringBefore("/") == fallback.substringBefore("/") } ?: fallback
 }
+
+private fun String.isPositiveAmountText(): Boolean =
+    runCatching { BigDecimal(trim()) > BigDecimal.ZERO }.getOrDefault(false)
+
+private fun Long.toAmountText(): String =
+    BigDecimal(this).movePointLeft(2).stripTrailingZeros().toPlainString()
 
 private fun amountColor(type: LedgerType): Color = when (type) {
     LedgerType.EXPENSE -> Color(0xFF8A3B2E)

@@ -126,6 +126,40 @@ class AutoLedgerViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun updateEntry(
+        id: String,
+        type: LedgerType,
+        amountText: String,
+        merchant: String,
+        categoryPath: String,
+        account: String,
+        note: String,
+        confirm: Boolean,
+    ) {
+        val cents = amountText.toCentsOrNull()
+        if (cents == null || cents <= 0) {
+            _message.value = "请输入有效金额"
+            return
+        }
+        viewModelScope.launch {
+            val updated = repository.updateEntry(
+                id = id,
+                type = type,
+                amountCents = cents,
+                merchant = merchant,
+                categoryPath = categoryPath,
+                account = account,
+                note = note,
+                confirm = confirm,
+            )
+            _message.value = when {
+                !updated -> "账单不存在或已删除"
+                confirm -> "已纠错并确认入账"
+                else -> "已保存账单修改"
+            }
+        }
+    }
+
     fun updateSyncKey(ownerKey: String) {
         if (ownerKey.length < 16) {
             _message.value = "同步密钥太短"

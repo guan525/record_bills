@@ -193,6 +193,37 @@ class BillParserTest {
     }
 
     @Test
+    fun usesPaidAmountInsteadOfOrderAmount() {
+        val bill = parser.parse(
+            sourceKind = SourceKind.NOTIFICATION,
+            sourcePackage = "com.eg.android.AlipayGphone",
+            sourceAppName = "支付宝",
+            title = "支付成功",
+            text = "星巴克订单金额200元，优惠30元，已支付170元",
+            timestampMillis = 1_717_000_000_000,
+        )
+
+        requireNotNull(bill)
+        assertEquals(LedgerType.EXPENSE, bill.type)
+        assertEquals(17_000L, bill.amountCents)
+        assertEquals("星巴克", bill.merchant)
+    }
+
+    @Test
+    fun ignoresPaymentCouponPromotionWithoutTransaction() {
+        val bill = parser.parse(
+            sourceKind = SourceKind.NOTIFICATION,
+            sourcePackage = "com.eg.android.AlipayGphone",
+            sourceAppName = "支付宝",
+            title = "支付优惠",
+            text = "支付立减券待领取5元，今日付款可用",
+            timestampMillis = 1_717_000_000_000,
+        )
+
+        assertNull(bill)
+    }
+
+    @Test
     fun ignoresPromotionWithoutTransaction() {
         val bill = parser.parse(
             sourceKind = SourceKind.NOTIFICATION,

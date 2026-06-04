@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
                 onConfirmAll = viewModel::confirmAll,
                 onIgnoreAll = viewModel::ignoreAll,
                 onDelete = viewModel::delete,
+                onUpdateEntry = viewModel::updateEntry,
                 onRefreshSources = viewModel::refreshSources,
                 onSyncNow = viewModel::syncNow,
                 onExportCsv = viewModel::exportCsv,
