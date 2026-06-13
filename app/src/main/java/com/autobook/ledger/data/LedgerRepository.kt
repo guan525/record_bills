@@ -6,6 +6,7 @@ import com.autobook.ledger.domain.LedgerStatus
 import com.autobook.ledger.domain.LedgerStats
 import com.autobook.ledger.domain.LedgerType
 import com.autobook.ledger.domain.ParsedBill
+import com.autobook.ledger.domain.RulesConfig
 import com.autobook.ledger.domain.SourceKind
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -91,17 +92,31 @@ class LedgerRepository(
         timestampMillis: Long,
     ): ParsedBill? {
         val parsed = parser.parse(sourceKind, sourcePackage, sourceAppName, title, text, timestampMillis) ?: return null
-        val duplicate = dao.findDuplicateCapture(
-            sourceKind = parsed.sourceKind.name,
-            sourcePackage = parsed.sourcePackage,
+        
+        // 跨渠道智能去重：时间窗口内、金额相同、类型相同
+        val duplicate = dao.findCrossChannelDuplicate(
             type = parsed.type.name,
             amountCents = parsed.amountCents,
-            merchant = parsed.merchant,
-            rawText = parsed.rawText,
-            windowStart = parsed.occurredAt - DUPLICATE_CAPTURE_WINDOW_MS,
-            windowEnd = parsed.occurredAt + DUPLICATE_CAPTURE_WINDOW_MS,
+            windowStart = parsed.occurredAt - RulesConfig.DEDUPLICATION_WINDOW_MS,
+            windowEnd = parsed.occurredAt + RulesConfig.DEDUPLICATION_WINDOW_MS,
         )
-        if (duplicate != null) return duplicate.toParsedBill()
+        
+        if (duplicate != null) {
+            // 如果已存在的记录可信度更低，则替换它
+            val existingPriority = RulesConfig.getSourcePriority(
+                SourceKind.valueOf(duplicate.sourceKind),
+                duplicate.sourcePackage
+            )
+            val newPriority = RulesConfig.getSourcePriority(sourceKind, sourcePackage)
+            
+            if (newPriority > existingPriority) {
+                // 新记录可信度更高，替换旧记录
+                dao.upsert(LedgerEntryEntity.fromParsedBill(parsed))
+                return parsed
+            }
+            // 已存在记录可信度更高或相同，返回已存在的记录
+            return duplicate.toParsedBill()
+        }
 
         dao.upsert(LedgerEntryEntity.fromParsedBill(parsed))
         return parsed

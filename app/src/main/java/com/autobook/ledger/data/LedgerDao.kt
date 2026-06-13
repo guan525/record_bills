@@ -46,6 +46,34 @@ interface LedgerDao {
         windowEnd: Long,
     ): LedgerEntryEntity?
 
+    /**
+     * 跨渠道智能去重查询
+     * 匹配条件：时间窗口内、金额相同、类型相同（不要求 rawText 完全一致）
+     */
+    @Query(
+        """
+        SELECT * FROM ledger_entries
+        WHERE is_deleted = 0
+            AND type = :type
+            AND amount_cents = :amountCents
+            AND occurred_at BETWEEN :windowStart AND :windowEnd
+        ORDER BY 
+            CASE source_kind 
+                WHEN 'NOTIFICATION' THEN 0 
+                WHEN 'SMS' THEN 1 
+                ELSE 2 
+            END,
+            confidence DESC
+        LIMIT 1
+        """
+    )
+    suspend fun findCrossChannelDuplicate(
+        type: String,
+        amountCents: Long,
+        windowStart: Long,
+        windowEnd: Long,
+    ): LedgerEntryEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: LedgerEntryEntity)
 

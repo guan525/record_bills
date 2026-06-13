@@ -3,6 +3,10 @@ package com.autobook.ledger.domain
 import java.math.BigDecimal
 import java.math.RoundingMode
 
+/**
+ * 账单解析器
+ * 使用 RulesConfig 中的规则进行解析，支持未来云端下发更新
+ */
 class BillParser(
     categoryCatalog: CategoryCatalog,
 ) {
@@ -48,20 +52,16 @@ class BillParser(
     }
 
     private fun isPromotionOnly(raw: String): Boolean {
-        val promotional = listOf("优惠", "红包", "活动", "领取", "满", "立减", "折扣", "券")
-        val transactional = listOf("成功付款", "付款成功", "已支付", "实付", "实际支付", "支付成功", "支付金额", "付款金额", "支出", "消费", "扣款", "退款", "转入", "转出", "到账", "自动续费", "收款")
-        return promotional.any(raw::contains) && transactional.none(raw::contains)
+        val hasPromotional = RulesConfig.PROMOTIONAL_KEYWORDS.any(raw::contains)
+        val hasTransactional = (RulesConfig.PAYMENT_KEYWORDS + 
+                               RulesConfig.REFUND_KEYWORDS + 
+                               RulesConfig.TRANSFER_KEYWORDS + 
+                               listOf("收款")).any(raw::contains)
+        return hasPromotional && !hasTransactional
     }
 
     private fun extractAmountCents(raw: String): Long? {
-        val patterns = listOf(
-            Regex("""(?:实付|已支付|实际支付|支付金额|付款金额|扣款金额)\s*[¥￥]?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元?"""),
-            Regex("""[¥￥]\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)"""),
-            Regex("""人民币\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元?"""),
-            Regex("""(?:消费金额|消费|支出|付款|扣款)\s*[¥￥]?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元"""),
-            Regex("""([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元"""),
-        )
-        val amountText = patterns.firstNotNullOfOrNull { pattern ->
+        val amountText = RulesConfig.AMOUNT_PATTERNS.firstNotNullOfOrNull { pattern ->
             pattern.find(raw)?.groupValues?.getOrNull(1)
         } ?: return null
         return BigDecimal(amountText.replace(",", ""))
@@ -71,23 +71,14 @@ class BillParser(
     }
 
     private fun detectType(raw: String): LedgerType = when {
-        raw.contains("退款") || raw.contains("退回") || raw.contains("返还") -> LedgerType.REFUND
-        raw.contains("转入") || raw.contains("转出") || raw.contains("转账") || raw.contains("提现") || raw.contains("零钱通") -> LedgerType.TRANSFER
-        raw.contains("工资") || raw.contains("薪资") || raw.contains("奖金") || raw.contains("收入") -> LedgerType.INCOME
+        RulesConfig.REFUND_KEYWORDS.any(raw::contains) -> LedgerType.REFUND
+        RulesConfig.TRANSFER_KEYWORDS.any(raw::contains) -> LedgerType.TRANSFER
+        RulesConfig.INCOME_KEYWORDS.any(raw::contains) -> LedgerType.INCOME
         else -> LedgerType.EXPENSE
     }
 
     private fun extractMerchant(raw: String, sourceAppName: String): String {
-        val patterns = listOf(
-            Regex("""给\s*([^\s，,。；;]+)"""),
-            Regex("""收款方\s*([^\s，,。；;]+)"""),
-            Regex("""付款方\s*([^\s，,。；;]+)"""),
-            Regex("""商户\s*[:：]?\s*([^\s，,。；;可]+)"""),
-            Regex("""在\s*([^\s，,。；;]+)\s*(?:消费|支付|付款)"""),
-            Regex("""([^\s，,。；;]+)订单(?:金额|支付|付款)"""),
-            Regex("""([^\s，,。；;]+)\s*(?:会员)?(?:自动续费|扣款|消费成功|付款成功)"""),
-        )
-        val candidate = patterns.firstNotNullOfOrNull { pattern ->
+        val candidate = RulesConfig.MERCHANT_PATTERNS.firstNotNullOfOrNull { pattern ->
             pattern.find(raw)?.groupValues?.getOrNull(1)
         }
         return candidate
@@ -124,14 +115,10 @@ class BillParser(
     }
 
     private fun confidenceFor(sourcePackage: String?, sourceAppName: String, merchant: String, raw: String): Int {
-        val knownSource = listOf("支付宝", "微信", "银行", "招商", "工商", "建设", "农业", "交通", "京东", "美团", "饿了么")
-            .any { sourceAppName.contains(it) || raw.contains(it) }
-        val knownPackage = sourcePackage?.let { packageName ->
-            listOf("alipay", "tencent.mm", "bank", "cmb", "unionpay").any { packageName.contains(it, ignoreCase = true) }
-        } ?: false
+        val highConfidence = RulesConfig.isHighConfidenceSource(sourcePackage, sourceAppName, raw)
         val merchantKnown = merchant != sourceAppName && merchant != "未知商户"
         var score = 55
-        if (knownSource || knownPackage) score += 20
+        if (highConfidence) score += 20
         if (merchantKnown) score += 15
         if (raw.contains("付款") || raw.contains("支出") || raw.contains("扣款") || raw.contains("消费")) score += 10
         return score.coerceIn(35, 95)

@@ -2,20 +2,22 @@ package com.autobook.ledger.capture
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import com.autobook.ledger.data.LedgerDatabase
-import com.autobook.ledger.data.LedgerRepository
+import com.autobook.ledger.AutoLedgerApp
 import com.autobook.ledger.domain.SourceKind
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
+/**
+ * 通知监听服务
+ * 仅处理白名单应用的通知，避免无效计算和误判
+ */
 class AutoLedgerNotificationListener : NotificationListenerService() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
+        
+        // 白名单过滤：非白名单包名直接返回
+        if (!isWhitelistedPackage(sbn.packageName)) return
+        
         val extras = sbn.notification.extras ?: return
         val title = extras.getCharSequence("android.title")?.toString().orEmpty()
         val text = listOfNotNull(
@@ -30,22 +32,30 @@ class AutoLedgerNotificationListener : NotificationListenerService() {
             packageManager.getApplicationLabel(appInfo).toString()
         }.getOrDefault(sbn.packageName)
 
-        scope.launch {
-            val repository = LedgerRepository(LedgerDatabase.get(applicationContext).ledgerDao())
-            repository.capture(
-                sourceKind = SourceKind.NOTIFICATION,
-                sourcePackage = sbn.packageName,
-                sourceAppName = sourceAppName,
-                title = title,
-                text = text,
-                timestampMillis = sbn.postTime,
-            )
+        val app = application as? AutoLedgerApp ?: return
+        
+        app.applicationScope.launch {
+            try {
+                val repository = app.ledgerRepository
+                repository.capture(
+                    sourceKind = SourceKind.NOTIFICATION,
+                    sourcePackage = sbn.packageName,
+                    sourceAppName = sourceAppName,
+                    title = title,
+                    text = text,
+                    timestampMillis = sbn.postTime,
+                )
+            } catch (e: Exception) {
+                // 静默处理异常，避免影响系统服务
+            }
         }
     }
 
-    override fun onDestroy() {
-        scope.cancel()
-        super.onDestroy()
+    /**
+     * 检查是否为白名单包名
+     */
+    private fun isWhitelistedPackage(packageName: String): Boolean {
+        return WhitelistPackages.ALL.any { it.first == packageName }
     }
 }
 

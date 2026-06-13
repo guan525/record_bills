@@ -2,6 +2,64 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <queries>
+        <!-- 支付宝 -->
+        <package android:name="com.eg.android.AlipayGphone" />
+        <package android:name="com.eg.android.AlipayGphoneHW" />
+        <!-- 微信 -->
+        <package android:name="com.tencent.mm" />
+        <!-- 云闪付 -->
+        <package android:name="com.unionpay" />
+        <!-- 招商银行 -->
+        <package android:name="cmb.pb" />
+        <package android:name="com.cmbchina.ccd.pluto" />
+        <!-- 工商银行 -->
+        <package android:name="com.icbc" />
+        <package android:name="com.icbc.client" />
+        <!-- 建设银行 -->
+        <package android:name="com.chinamworld.main" />
+        <package android:name="com.ccb.ccbhome" />
+        <!-- 农业银行 -->
+        <package android:name="com.android.bankabc" />
+        <!-- 交通银行 -->
+        <package android:name="com.bankcomm.Bankcomm" />
+        <!-- 中国银行 -->
+        <package android:name="com.chinamworld.bocmbci" />
+        <package android:name="com.boc.macau.bocmobile" />
+        <!-- 邮储银行 -->
+        <package android:name="com.psbc.citizencard" />
+        <!-- 平安银行 -->
+        <package android:name="com.pingan.paces.ccb" />
+        <!-- 浦发银行 -->
+        <package android:name="com.spdb.mobilebank" />
+        <!-- 民生银行 -->
+        <package android:name="com.cmbc.mobilebank" />
+        <!-- 中信银行 -->
+        <package android:name="com.ecnc.mobilebank" />
+        <!-- 光大银行 -->
+        <package android:name="com.cebbank.mobilebank" />
+        <!-- 淘宝 -->
+        <package android:name="com.taobao.taobao" />
+        <!-- 天猫 -->
+        <package android:name="com.tmall.wireless" />
+        <!-- 京东 -->
+        <package android:name="com.jingdong.app.mall" />
+        <!-- 拼多多 -->
+        <package android:name="com.xunmeng.pinduoduo" />
+        <!-- 美团 -->
+        <package android:name="com.sankuai.meituan" />
+        <!-- 饿了么 -->
+        <package android:name="me.ele" />
+        <!-- 抖音 -->
+        <package android:name="com.ss.android.ugc.aweme" />
+        <!-- 快手 -->
+        <package android:name="com.smile.gifmaker" />
+        <!-- 滴滴 -->
+        <package android:name="com.sdu.didi.psnger" />
+        <!-- 携程 -->
+        <package android:name="ctrip.android.view" />
+        <!-- 飞猪 -->
+        <package android:name="com.taobao.trip" />
+        <!-- 通用查询 -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -12,7 +70,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:name=".AutoLedgerApp"
@@ -38,11 +98,23 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+        <service
+            android:name=".capture.LedgerGuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
         <receiver
             android:name=".capture.SmsBillReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".capture.BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
     </application>
