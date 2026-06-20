@@ -54,6 +54,10 @@ interface LedgerDao {
         """
         SELECT * FROM ledger_entries
         WHERE is_deleted = 0
+            AND NOT (
+                source_kind = :sourceKind
+                AND COALESCE(source_package, '') = COALESCE(:sourcePackage, '')
+            )
             AND type = :type
             AND amount_cents = :amountCents
             AND occurred_at BETWEEN :windowStart AND :windowEnd
@@ -68,6 +72,8 @@ interface LedgerDao {
         """
     )
     suspend fun findCrossChannelDuplicate(
+        sourceKind: String,
+        sourcePackage: String?,
         type: String,
         amountCents: Long,
         windowStart: Long,

@@ -101,7 +101,11 @@
         <service
             android:name=".capture.LedgerGuardService"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps user-enabled automatic bookkeeping listener health guard running while local bill capture is enabled." />
+        </service>
         <receiver
             android:name=".capture.SmsBillReceiver"
             android:exported="true">

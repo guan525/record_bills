@@ -92,9 +92,23 @@ class LedgerRepository(
         timestampMillis: Long,
     ): ParsedBill? {
         val parsed = parser.parse(sourceKind, sourcePackage, sourceAppName, title, text, timestampMillis) ?: return null
-        
+
+        val exactDuplicate = dao.findDuplicateCapture(
+            sourceKind = parsed.sourceKind.name,
+            sourcePackage = parsed.sourcePackage,
+            type = parsed.type.name,
+            amountCents = parsed.amountCents,
+            merchant = parsed.merchant,
+            rawText = parsed.rawText,
+            windowStart = parsed.occurredAt - DUPLICATE_CAPTURE_WINDOW_MS,
+            windowEnd = parsed.occurredAt + DUPLICATE_CAPTURE_WINDOW_MS,
+        )
+        if (exactDuplicate != null) return exactDuplicate.toParsedBill()
+
         // 跨渠道智能去重：时间窗口内、金额相同、类型相同
         val duplicate = dao.findCrossChannelDuplicate(
+            sourceKind = parsed.sourceKind.name,
+            sourcePackage = parsed.sourcePackage,
             type = parsed.type.name,
             amountCents = parsed.amountCents,
             windowStart = parsed.occurredAt - RulesConfig.DEDUPLICATION_WINDOW_MS,

@@ -1,6 +1,7 @@
 package com.autobook.ledger
 
 import android.app.Application
+import com.autobook.ledger.capture.AutoLedgerGuardCoordinator
 import com.autobook.ledger.data.LedgerDatabase
 import com.autobook.ledger.data.LedgerRepository
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +28,7 @@ class AutoLedgerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        AutoLedgerGuardCoordinator.ensureBackgroundChecks(this)
     }
 
     companion object {
@@ -40,4 +42,3 @@ class AutoLedgerApp : Application() {
         }
     }
 }
-

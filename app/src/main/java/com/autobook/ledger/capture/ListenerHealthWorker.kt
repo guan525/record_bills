@@ -55,6 +55,10 @@ class ListenerHealthWorker(
      * 发送恢复通知
      */
     private fun sendRecoveryNotification() {
+        if (!AutoLedgerGuardCoordinator.canPostNotifications(applicationContext)) {
+            return
+        }
+
         val notificationManager = applicationContext.getSystemService(
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager

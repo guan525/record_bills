@@ -3,9 +3,12 @@
 package com.autobook.ledger.ui
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +85,7 @@ fun AutoLedgerAppScreen(
     sources: List<SpendingSourceApp>,
     message: String,
     syncKey: String,
+    autoLedgerEnabled: Boolean,
     supabaseEndpoint: String,
     categories: List<String>,
     onAddManual: (LedgerType, String, String, String, String, String) -> Unit,
@@ -133,7 +138,7 @@ fun AutoLedgerAppScreen(
                     )
                     MainTab.RECORDS -> RecordsScreen(entries, onConfirm, onIgnore, onConfirmAll, onIgnoreAll, onDelete, onEdit = { editingEntry = it })
                     MainTab.INSIGHTS -> InsightsScreen(entries, stats)
-                    MainTab.SOURCES -> SourcesScreen(sources, onRefreshSources)
+                    MainTab.SOURCES -> SourcesScreen(sources, autoLedgerEnabled, onRefreshSources)
                     MainTab.SETTINGS -> SettingsScreen(syncKey, supabaseEndpoint, message, onSyncNow, onExportCsv, onUpdateSyncKey)
                 }
             }
@@ -290,13 +295,23 @@ private fun InsightsScreen(entries: List<ParsedBill>, stats: LedgerStats) {
 @Composable
 private fun SourcesScreen(
     sources: List<SpendingSourceApp>,
+    autoLedgerEnabled: Boolean,
     onRefreshSources: () -> Unit,
 ) {
     val context = LocalContext.current
     val smsGranted = context.checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED &&
         context.checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
-    val notificationEnabled = notificationListenerEnabled(context)
+    val notificationEnabled = autoLedgerEnabled
+    val isXiaomi = remember { isXiaomiDevice() }
+    var showXiaomiGuide by remember { mutableStateOf(false) }
     val smsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {}
+
+    LaunchedEffect(isXiaomi, notificationEnabled) {
+        if (isXiaomi && notificationEnabled && !xiaomiGuideAlreadyShown(context)) {
+            showXiaomiGuide = true
+        }
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -310,6 +325,14 @@ private fun SourcesScreen(
                 onOpenNotificationSettings = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
                 onRequestSms = { smsLauncher.launch(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)) },
             )
+        }
+        if (isXiaomi) {
+            item {
+                XiaomiGuideHighlight(
+                    notificationEnabled = notificationEnabled,
+                    onOpenGuide = { showXiaomiGuide = true },
+                )
+            }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -328,6 +351,16 @@ private fun SourcesScreen(
                 }
             }
         }
+    }
+
+    if (showXiaomiGuide) {
+        RedmiK50GuideDialog(
+            autoLedgerEnabled = notificationEnabled,
+            onDismiss = {
+                if (notificationEnabled) markXiaomiGuideShown(context)
+                showXiaomiGuide = false
+            },
+        )
     }
 }
 
@@ -644,6 +677,88 @@ private fun PermissionPanel(
 }
 
 @Composable
+private fun XiaomiGuideHighlight(
+    notificationEnabled: Boolean,
+    onOpenGuide: () -> Unit,
+) {
+    Panel(background = Color(0xFFFFF3D6), contentColor = Color(0xFF3D2C00)) {
+        Text("红米 K50 / 小米系统专属防杀设置", fontWeight = FontWeight.SemiBold)
+        Text(
+            if (notificationEnabled) {
+                "已检测到自动记账开启。建议完成自启动、无限制省电、后台锁定三项设置，降低系统清理导致漏记的概率。"
+            } else {
+                "检测到小米设备。开启自动记账后，请按专属步骤关闭系统防杀限制。"
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = onOpenGuide) { Text("查看防杀设置") }
+    }
+}
+
+@Composable
+private fun RedmiK50GuideDialog(
+    autoLedgerEnabled: Boolean,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("红米 K50 专属防杀设置") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(color = Color(0xFFFFF3D6), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        if (autoLedgerEnabled) {
+                            "已检测到自动记账开启。请继续完成下面 3 项小米系统设置。"
+                        } else {
+                            "检测到小米设备。开启自动记账后，请完成下面 3 项设置。"
+                        },
+                        modifier = Modifier.padding(12.dp),
+                        color = Color(0xFF5F4320),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                XiaomiGuideStep(
+                    title = "1. 自启动权限",
+                    body = "打开 MIUI/HyperOS 自启动管理，找到“自动账本”，开启自启动。",
+                    button = "打开自启动管理",
+                    onClick = { context.openXiaomiAutostartSettings() },
+                )
+                XiaomiGuideStep(
+                    title = "2. 无限制省电策略",
+                    body = "进入小米省电策略，把“自动账本”的后台省电策略改为“无限制”。如果系统没有直接打开本 App，请在列表中手动找到“自动账本”。",
+                    button = "打开省电策略",
+                    onClick = { context.openXiaomiBatterySettings() },
+                )
+                XiaomiGuideStep(
+                    title = "3. 后台锁定任务",
+                    body = "返回桌面后打开最近任务界面，下拉“自动账本”卡片或长按图标，给 App 加小锁，避免一键清理时被结束。",
+                    button = "回到桌面",
+                    onClick = { context.openHomeScreen() },
+                )
+            }
+        },
+        confirmButton = { Button(onClick = onDismiss) { Text("我已设置") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("稍后") } },
+    )
+}
+
+@Composable
+private fun XiaomiGuideStep(
+    title: String,
+    body: String,
+    button: String,
+    onClick: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, fontWeight = FontWeight.SemiBold)
+        Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = onClick) { Text(button) }
+    }
+}
+
+@Composable
 private fun Breakdown(title: String, values: Map<String, Long>) {
     val top = values.entries.sortedByDescending { it.value }.take(8)
     val max = top.maxOfOrNull { it.value } ?: 1L
@@ -788,3 +903,66 @@ private fun notificationListenerEnabled(context: Context): Boolean {
     val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners").orEmpty()
     return flat.lowercase(Locale.US).contains(context.packageName.lowercase(Locale.US))
 }
+
+private fun isXiaomiDevice(): Boolean =
+    Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
+
+private fun xiaomiGuideAlreadyShown(context: Context): Boolean =
+    context.getSharedPreferences(XIAOMI_GUIDE_PREFS, Context.MODE_PRIVATE)
+        .getBoolean(XIAOMI_GUIDE_SHOWN_KEY, false)
+
+private fun markXiaomiGuideShown(context: Context) {
+    context.getSharedPreferences(XIAOMI_GUIDE_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(XIAOMI_GUIDE_SHOWN_KEY, true)
+        .apply()
+}
+
+private fun Context.openXiaomiAutostartSettings() {
+    startFirstAvailableActivity(
+        Intent().setComponent(
+            ComponentName(
+                "com.miui.securitycenter",
+                "com.miui.permcenter.autostart.AutoStartManagementActivity",
+            ),
+        ),
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)),
+    )
+}
+
+private fun Context.openXiaomiBatterySettings() {
+    val appLabel = runCatching {
+        packageManager.getApplicationLabel(applicationInfo).toString()
+    }.getOrDefault("自动账本")
+    startFirstAvailableActivity(
+        Intent("miui.intent.action.HIDDEN_APPS_CONFIG_ACTIVITY")
+            .setComponent(ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"))
+            .putExtra("package_name", packageName)
+            .putExtra("package_label", appLabel),
+        Intent("miui.intent.action.POWER_HIDE_MODE_APP_LIST")
+            .setPackage("com.miui.powerkeeper"),
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)),
+    )
+}
+
+private fun Context.openHomeScreen() {
+    startFirstAvailableActivity(
+        Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_HOME)
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
+}
+
+private fun Context.startFirstAvailableActivity(vararg intents: Intent): Boolean {
+    intents.forEach { intent ->
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val canHandle = intent.resolveActivity(packageManager) != null
+        if (canHandle && runCatching { startActivity(intent) }.isSuccess) {
+            return true
+        }
+    }
+    return false
+}
+
+private const val XIAOMI_GUIDE_PREFS = "xiaomi_auto_ledger_guide"
+private const val XIAOMI_GUIDE_SHOWN_KEY = "redmi_k50_guide_shown"

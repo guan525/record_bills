@@ -345,4 +345,31 @@ private class FakeLedgerDao : LedgerDao {
                     it.occurredAt in windowStart..windowEnd
             }
             .maxByOrNull { it.occurredAt }
+
+    override suspend fun findCrossChannelDuplicate(
+        sourceKind: String,
+        sourcePackage: String?,
+        type: String,
+        amountCents: Long,
+        windowStart: Long,
+        windowEnd: Long,
+    ): LedgerEntryEntity? =
+        entries.values
+            .filter {
+                !it.isDeleted &&
+                    !(it.sourceKind == sourceKind && it.sourcePackage.orEmpty() == sourcePackage.orEmpty()) &&
+                    it.type == type &&
+                    it.amountCents == amountCents &&
+                    it.occurredAt in windowStart..windowEnd
+            }
+            .sortedWith(
+                compareBy<LedgerEntryEntity> {
+                    when (it.sourceKind) {
+                        SourceKind.NOTIFICATION.name -> 0
+                        SourceKind.SMS.name -> 1
+                        else -> 2
+                    }
+                }.thenByDescending { it.confidence },
+            )
+            .firstOrNull()
 }
